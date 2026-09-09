@@ -1,54 +1,55 @@
 # pet-friends-ddd
 
-Domain-Driven Design study for **Pet Friends**, a pet care booking platform where tutors schedule services such as bathing, grooming and veterinary visits with caregivers.
+Código do TP2 de Domain-Driven Design: agregados, invariantes de negócio, eventos de domínio e event sourcing, dentro do escopo do projeto **Pet Friends**.
 
-This repository holds the Java code written for the DDD assignment: aggregates, business invariants, domain events and the architecture that publishes them.
+## Contexto
 
-## Domain
+O Pet Friends é uma plataforma de serviços e produtos para pets, dividida em vários contextos delimitados. Este repositório vive no contexto de **Agendamento de Serviços**, que é core, e conversa com **Gestão de Veterinários** por eventos de domínio.
 
-The platform is split into bounded contexts. This repository focuses on **Scheduling**.
-
-| Concept | Type | Note |
+| Conceito | Tipo | Observação |
 | --- | --- | --- |
-| Booking | Aggregate root | Owns the appointment lifecycle and its invariants |
-| PetId, CaregiverId | Value objects | References to other aggregates, by identity only |
-| TimeSlot, Money | Value objects | Immutable, compared by value |
-| BookingConfirmed | Domain event | A fact that already happened |
+| Consulta | Raiz do agregado | Dona do ciclo de vida do atendimento e das suas invariantes |
+| PetId, VeterinarioId | Objetos de valor | Referência a outros agregados, apenas pela identidade |
+| Periodo, Dinheiro | Objetos de valor | Imutáveis, comparados pelo conteúdo |
+| ConsultaAgendada, ConsultaCancelada | Eventos de domínio | Fatos que já aconteceram |
 
-Pet and Caregiver are separate aggregates with their own lifecycles, so Booking stores only their identifiers. One transaction changes one aggregate.
+Pet e Veterinário são agregados de outros contextos, cada um com ciclo de vida próprio. Por isso a Consulta guarda só o identificador deles, e uma transação altera um único agregado.
 
-## Structure
+## Estrutura
 
     src/main/java/com/petfriends
     |-- shared/domain
-    |   |-- DomainEvent.java              abstraction for any domain event
-    |   +-- DomainEventPublisher.java     outbound port, hides the broker
-    +-- scheduling
+    |   |-- EventoDeDominio.java            abstração de qualquer evento
+    |   +-- PublicadorDeEventos.java        porta de saída, esconde o broker
+    +-- agendamento
         |-- domain
-        |   |-- Booking.java              aggregate root
-        |   |-- BookingRepository.java    one repository per aggregate
-        |   |-- PetId.java                reference to another aggregate
-        |   |-- CaregiverId.java          reference to another aggregate
-        |   |-- TimeSlot.java             value object
-        |   |-- Money.java                value object
-        |   +-- event
-        |       +-- BookingConfirmed.java  domain event implementation
+        |   |-- Consulta.java               raiz do agregado
+        |   |-- ConsultaRepository.java     um repositório por agregado
+        |   |-- PetId.java                  referência a outro agregado
+        |   |-- VeterinarioId.java          referência a outro agregado
+        |   |-- Periodo.java                objeto de valor
+        |   |-- Dinheiro.java               objeto de valor
+        |   +-- evento
+        |       |-- ConsultaAgendada.java
+        |       +-- ConsultaCancelada.java
         +-- application
-            +-- ConfirmBookingService.java  use case: save first, publish after
+            +-- CancelarConsultaService.java  caso de uso: grava, depois publica
 
-## Assignment mapping
+## Mapeamento das questões do TP2
 
-| Question | File |
+| Questão | Arquivo |
 | --- | --- |
-| 6. Aggregate that references another aggregate by id | [Booking.java](src/main/java/com/petfriends/scheduling/domain/Booking.java) |
-| 7. Business method that publishes a domain event | [Booking.confirm()](src/main/java/com/petfriends/scheduling/domain/Booking.java) |
-| 9. Domain event abstraction | [DomainEvent.java](src/main/java/com/petfriends/shared/domain/DomainEvent.java) |
-| 10. Domain event implementation | [BookingConfirmed.java](src/main/java/com/petfriends/scheduling/domain/event/BookingConfirmed.java) |
+| 6. Agregado que referencia outro agregado por ID | [Consulta.java](src/main/java/com/petfriends/agendamento/domain/Consulta.java) |
+| 7. Método de negócio que publica um evento de domínio | [Consulta.cancelar()](src/main/java/com/petfriends/agendamento/domain/Consulta.java) e [CancelarConsultaService.java](src/main/java/com/petfriends/agendamento/application/CancelarConsultaService.java) |
+| 9. Abstração de evento de domínio | [EventoDeDominio.java](src/main/java/com/petfriends/shared/domain/EventoDeDominio.java) |
+| 10. Implementação de evento de domínio | [ConsultaAgendada.java](src/main/java/com/petfriends/agendamento/domain/evento/ConsultaAgendada.java) |
 
-## Event flow
+## Fluxo do evento
 
-Booking.confirm() records the event inside the aggregate. ConfirmBookingService saves the aggregate and only then publishes, so a fact is never announced before the database confirms it. In production the pair becomes the Outbox pattern: state and event are written in the same transaction, a worker reads the outbox and delivers to the broker topic petfriends.scheduling.booking.confirmed, which fans out to the notification, caregiver agenda and billing queues.
+A Consulta registra o fato dentro do agregado. O caso de uso grava o estado e só então publica, para nunca anunciar algo que o banco não confirmou. Em produção o par vira o padrão Outbox: estado e evento gravados na mesma transação, um worker lê a outbox e entrega ao tópico petfriends.agendamento.consulta.agendada, que faz fan-out para as filas de Gestão de Veterinários, Atendimento e Faturamento.
 
-## Course
+Cada consumidor usa o eventoId para descartar entrega duplicada, de modo que a mesma notificação recebida duas vezes nunca gera duas consultas.
 
-Domain-Driven Design (DDD) e Arquitetura de Softwares Escalaveis com Java, Instituto Infnet.
+## Disciplina
+
+Domain-Driven Design (DDD) e Arquitetura de Softwares Escaláveis com Java, Instituto Infnet.
